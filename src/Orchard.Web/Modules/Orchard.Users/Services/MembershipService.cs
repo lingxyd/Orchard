@@ -1,22 +1,24 @@
-﻿using System;
+﻿using Orchard.ContentManagement;
+using Orchard.DisplayManagement;
+using Orchard.Environment.Configuration;
+using Orchard.Environment.Extensions;
+using Orchard.Localization;
+using Orchard.Logging;
+using Orchard.Messaging.Services;
+using Orchard.Security;
+using Orchard.Services;
+using Orchard.Users.Events;
+using Orchard.Users.Models;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Web.Security;
-using Orchard.DisplayManagement;
-using Orchard.Localization;
-using Orchard.Logging;
-using Orchard.ContentManagement;
-using Orchard.Security;
-using Orchard.Users.Events;
-using Orchard.Users.Models;
-using Orchard.Messaging.Services;
-using System.Collections.Generic;
-using Orchard.Services;
 using System.Web.Helpers;
-using Orchard.Environment.Configuration;
+using System.Web.Security;
 
 namespace Orchard.Users.Services {
+    [OrchardSuppressDependency("Orchard.Security.NullMembershipService")]
     public class MembershipService : IMembershipService {
         private const string PBKDF2 = "PBKDF2";
         private const string DefaultHashAlgorithm = PBKDF2;
@@ -28,6 +30,7 @@ namespace Orchard.Users.Services {
         private readonly IShapeFactory _shapeFactory;
         private readonly IShapeDisplay _shapeDisplay;
         private readonly IAppConfigurationAccessor _appConfigurationAccessor;
+        private readonly IClock _clock;
 
         public MembershipService(
             IOrchardServices orchardServices, 
@@ -45,6 +48,7 @@ namespace Orchard.Users.Services {
             _shapeFactory = shapeFactory;
             _shapeDisplay = shapeDisplay;
             _appConfigurationAccessor = appConfigurationAccessor;
+            _clock = clock;
             Logger = NullLogger.Instance;
             T = NullLocalizer.Instance;
         }
@@ -52,11 +56,9 @@ namespace Orchard.Users.Services {
         public ILogger Logger { get; set; }
         public Localizer T { get; set; }
 
-        public MembershipSettings GetSettings() {
-            var settings = new MembershipSettings();
-            // accepting defaults
-            return settings;
-        }
+        public IMembershipSettings GetSettings(){
+            return _orchardServices.WorkContext.CurrentSite.As<RegistrationSettingsPart>();
+         }
 
         public IUser CreateUser(CreateUserParams createUserParams) {
             Logger.Information("CreateUser {0} {1}", createUserParams.Username, createUserParams.Email);
@@ -69,6 +71,7 @@ namespace Orchard.Users.Services {
             user.Email = createUserParams.Email;
             user.NormalizedUserName = createUserParams.Username.ToLowerInvariant();
             user.HashAlgorithm = PBKDF2;
+            user.CreatedUtc = _clock.UtcNow;
             SetPassword(user, createUserParams.Password);
 
             if ( registrationSettings != null ) {
@@ -113,9 +116,9 @@ namespace Orchard.Users.Services {
                         template.Metadata.Wrappers.Add("Template_User_Wrapper");
 
                         var parameters = new Dictionary<string, object> {
-                            {"Subject", T("New account").Text},
+                            {"Subject", T("New account on {0}.", _orchardServices.WorkContext.CurrentSite.SiteName).Text},
                             {"Body", _shapeDisplay.Display(template)},
-                            {"Recipients", new [] { recipient.Email }}
+                            {"Recipients", recipient.Email }
                         };
 
                         _messageService.Send("Email", parameters);
@@ -152,6 +155,10 @@ namespace Orchard.Users.Services {
             return user;
         }
 
+        public bool PasswordIsExpired(IUser user, int days){
+            return user.As<UserPart>().LastPasswordChangeUtc.Value.AddDays(days) < _clock.UtcNow;
+        }
+
         public void SetPassword(IUser user, string password) {
             if (!user.Is<UserPart>())
                 throw new InvalidCastException();
@@ -171,6 +178,7 @@ namespace Orchard.Users.Services {
                 default:
                     throw new ApplicationException(T("Unexpected password format value").ToString());
             }
+            userPart.LastPasswordChangeUtc = _clock.UtcNow;
         }
 
         private bool ValidatePassword(UserPart userPart, string password) {
@@ -285,5 +293,6 @@ namespace Orchard.Users.Services {
         private bool ValidatePasswordEncrypted(UserPart userPart, string password) {
             return String.Equals(password, Encoding.UTF8.GetString(_encryptionService.Decode(Convert.FromBase64String(userPart.Password))), StringComparison.Ordinal);
         }
+
     }
 }

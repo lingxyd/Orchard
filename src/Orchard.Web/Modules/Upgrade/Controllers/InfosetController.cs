@@ -219,8 +219,8 @@ namespace Upgrade.Controllers {
                         site.As<InfosetPart>().Store("RegistrationSettingsPart", "UsersCanRegister", (bool)reader["UsersCanRegister"]);
                         site.As<InfosetPart>().Store("RegistrationSettingsPart", "UsersMustValidateEmail", (bool)reader["UsersMustValidateEmail"]);
                         site.As<InfosetPart>().Store("RegistrationSettingsPart", "UsersCanRegister", (bool)reader["UsersCanRegister"]);
-                        site.As<InfosetPart>().Store("RegistrationSettingsPart", "ValidateEmailRegisteredWebsite", ConvertToBool(reader["ValidateEmailRegisteredWebsite"]));
-                        site.As<InfosetPart>().Store("RegistrationSettingsPart", "ValidateEmailContactEMail", ConvertToBool(reader["ValidateEmailContactEMail"]));
+                        site.As<InfosetPart>().Store("RegistrationSettingsPart", "ValidateEmailRegisteredWebsite", ConvertToString(reader["ValidateEmailRegisteredWebsite"]));
+                        site.As<InfosetPart>().Store("RegistrationSettingsPart", "ValidateEmailContactEmail", ConvertToString(reader["ValidateEmailContactEmail"]));
                         site.As<InfosetPart>().Store("RegistrationSettingsPart", "UsersAreModerated", (bool)reader["UsersAreModerated"]);
                         site.As<InfosetPart>().Store("RegistrationSettingsPart", "NotifyModeration", (bool)reader["NotifyModeration"]);
                         site.As<InfosetPart>().Store("RegistrationSettingsPart", "NotificationsRecipients", ConvertToBool(reader["NotificationsRecipients"]));
@@ -278,8 +278,8 @@ namespace Upgrade.Controllers {
                 _upgradeService.ExecuteReader("DROP TABLE " + blogTable, null);
             }
             #endregion
-            
-            _orchardServices.Notifier.Information(T("Site Settings migrated successfully"));
+
+            _orchardServices.Notifier.Success(T("Site Settings migrated successfully"));
 
             return View();
         }

@@ -30,6 +30,7 @@ namespace Orchard.Taxonomies.Services {
         private readonly ShellSettings _shellSettings;
         private readonly IShellDescriptorManager _shellDescriptorManager;
 
+        private readonly HashSet<int> _processedTermParts = new HashSet<int>(); 
 
         public TaxonomyService(
             IRepository<TermContentItem> termContentItemRepository,
@@ -105,8 +106,7 @@ namespace Orchard.Taxonomies.Services {
                     .WithPart("AutoroutePart", builder => builder
                         .WithSetting("AutorouteSettings.AllowCustomPattern", "true")
                         .WithSetting("AutorouteSettings.AutomaticAdjustmentOnEdit", "false")
-                        .WithSetting("AutorouteSettings.PatternDefinitions", "[{Name:'Taxonomy and Title', Pattern: '{Content.Container.Path}/{Content.Slug}', Description: 'my-taxonomy/my-term/sub-term'}]")
-                        .WithSetting("AutorouteSettings.DefaultPatternIndex", "0"))
+                        .WithSetting("AutorouteSettings.PatternDefinitions", "[{Name:'Taxonomy and Title', Pattern: '{Content.Container.Path}/{Content.Slug}', Description: 'my-taxonomy/my-term/sub-term'}]"))
                     .WithPart("CommonPart")
                     .DisplayedAs(taxonomy.Name + " Term")
                 );
@@ -186,6 +186,12 @@ namespace Orchard.Taxonomies.Services {
             return TermPart.Sort(result);
         }
 
+        public int GetTermsCount(int taxonomyId) {
+            return _contentManager.Query<TermPart, TermPartRecord>()
+                .Where(x => x.TaxonomyId == taxonomyId)
+                .Count();
+        }
+
         public TermPart GetTerm(int id) {
             return _contentManager
                 .Query<TermPart, TermPartRecord>()
@@ -216,8 +222,7 @@ namespace Orchard.Taxonomies.Services {
 
                 termPart.As<ICommonPart>().Container = GetTaxonomy(termPart.TaxonomyId).ContentItem;
                 _contentManager.Create(termPart);
-            }
-            else {
+            } else {
                 _notifier.Warning(T("The term {0} already exists in this taxonomy", termPart.Name));
             }
         }
@@ -266,9 +271,14 @@ namespace Orchard.Taxonomies.Services {
             }
 
             var termPartRecordIds = termList.Select(t => t.Term.TermRecord.Id).ToArray();
-            _processingEngine.AddTask(_shellSettings, _shellDescriptorManager.GetShellDescriptor(), "ITermCountProcessor.Process", new Dictionary<string, object> { { "termPartRecordIds", termPartRecordIds } });
-
-
+            if (termPartRecordIds.Any()) {
+                if (!_processedTermParts.Any()) {
+                    _processingEngine.AddTask(_shellSettings, _shellDescriptorManager.GetShellDescriptor(), "ITermCountProcessor.Process", new Dictionary<string, object> { { "termPartRecordIds", _processedTermParts } });
+                }
+                foreach (var termPartRecordId in termPartRecordIds) {
+                    _processedTermParts.Add(termPartRecordId);                    
+                }
+            }
         }
 
         public IContentQuery<TermsPart, TermsPartRecord> GetContentItemsQuery(TermPart term, string fieldName = null) {
@@ -282,8 +292,7 @@ namespace Orchard.Taxonomies.Services {
                     tpr => tpr.Terms.Any(tr =>
                         tr.TermRecord.Id == term.Id
                         || tr.TermRecord.Path.StartsWith(rootPath)));
-            }
-            else {
+            } else {
                 query = query.Where(
                     tpr => tpr.Terms.Any(tr =>
                         tr.Field == fieldName

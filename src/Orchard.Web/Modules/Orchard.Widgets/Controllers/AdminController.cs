@@ -61,7 +61,7 @@ namespace Orchard.Widgets.Controllers {
                 return RedirectToAction("Index", "Admin", new { area = "Dashboard" });
             }
 
-            IEnumerable<LayerPart> layers = _widgetsService.GetLayers().ToList();
+            IEnumerable<LayerPart> layers = _widgetsService.GetLayers().OrderBy(x => x.Name).ToList();
 
             if (!layers.Any()) {
                 Services.Notifier.Error(T("There are no widget layers defined. A layer will need to be added in order to add widgets to any part of the site."));
@@ -69,7 +69,8 @@ namespace Orchard.Widgets.Controllers {
             }
 
             LayerPart currentLayer = layerId == null
-                ? layers.FirstOrDefault()
+                // look for the "Default" layer, or take the first if it doesn't exist
+                ? layers.FirstOrDefault(x => x.Name == "Default") ?? layers.FirstOrDefault()
                 : layers.FirstOrDefault(layer => layer.Id == layerId);
 
             if (currentLayer == null && layerId != null) { // Incorrect layer id passed
@@ -87,10 +88,10 @@ namespace Orchard.Widgets.Controllers {
 
             if (!String.IsNullOrWhiteSpace(culture)) {
                 widgets = widgets.Where(x => {
-                    if(x.Has<ILocalizableAspect>()) {
+                    if (x.Has<ILocalizableAspect>()) {
                         return String.Equals(x.As<ILocalizableAspect>().Culture, culture, StringComparison.InvariantCultureIgnoreCase);
                     }
-                    
+
                     return false;
                 }).ToList();
             }
@@ -142,7 +143,7 @@ namespace Orchard.Widgets.Controllers {
                 return RedirectToAction("Index");
             }
 
-            IEnumerable<LayerPart> layers = _widgetsService.GetLayers().ToList();
+            IEnumerable<LayerPart> layers = _widgetsService.GetLayers().OrderBy(x => x.Name).ToList();
 
             if (!layers.Any()) {
                 Services.Notifier.Error(T("Layer not found: {0}", layerId));
@@ -226,7 +227,7 @@ namespace Orchard.Widgets.Controllers {
                 return View(model);
             }
 
-            Services.Notifier.Information(T("Your {0} has been added.", widgetPart.TypeDefinition.DisplayName));
+            Services.Notifier.Success(T("Your {0} has been added.", widgetPart.TypeDefinition.DisplayName));
 
             return this.RedirectLocal(returnUrl, () => RedirectToAction("Index"));
         }
@@ -268,7 +269,7 @@ namespace Orchard.Widgets.Controllers {
                 return View(model);
             }
 
-            Services.Notifier.Information(T("Your {0} has been created.", layerPart.TypeDefinition.DisplayName));
+            Services.Notifier.Success(T("Your {0} has been created.", layerPart.TypeDefinition.DisplayName));
             return RedirectToAction("Index", "Admin", new { layerId = layerPart.Id });
         }
 
@@ -301,7 +302,7 @@ namespace Orchard.Widgets.Controllers {
                 return View(model);
             }
 
-            Services.Notifier.Information(T("Your {0} has been saved.", layerPart.TypeDefinition.DisplayName));
+            Services.Notifier.Success(T("Your {0} has been saved.", layerPart.TypeDefinition.DisplayName));
 
             return this.RedirectLocal(returnUrl, () => RedirectToAction("Index"));
         }
@@ -314,8 +315,9 @@ namespace Orchard.Widgets.Controllers {
 
             try {
                 _widgetsService.DeleteLayer(id);
-                Services.Notifier.Information(T("Layer was successfully deleted"));
-            } catch (Exception exception) {
+                Services.Notifier.Success(T("Layer was successfully deleted"));
+            }
+            catch (Exception exception) {
                 Logger.Error(T("Removing Layer failed: {0}", exception.Message).Text);
                 Services.Notifier.Error(T("Removing Layer failed: {0}", exception.Message));
             }
@@ -385,7 +387,7 @@ namespace Orchard.Widgets.Controllers {
 
                 conditionallyPublish(widgetPart.ContentItem);
 
-                Services.Notifier.Information(T("Your {0} has been saved.", widgetPart.TypeDefinition.DisplayName));
+                Services.Notifier.Success(T("Your {0} has been saved.", widgetPart.TypeDefinition.DisplayName));
             }
             catch (Exception exception) {
                 Logger.Error(T("Editing widget failed: {0}", exception.Message).Text);
@@ -410,7 +412,7 @@ namespace Orchard.Widgets.Controllers {
                 return HttpNotFound();
             try {
                 _widgetsService.DeleteWidget(widgetPart.Id);
-                Services.Notifier.Information(T("Widget was successfully deleted"));
+                Services.Notifier.Success(T("Widget was successfully deleted"));
             }
             catch (Exception exception) {
                 Logger.Error(T("Removing Widget failed: {0}", exception.Message).Text);

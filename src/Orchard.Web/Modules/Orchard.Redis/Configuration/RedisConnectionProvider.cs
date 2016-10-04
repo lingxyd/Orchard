@@ -4,17 +4,21 @@ using System.Configuration;
 using Orchard.Environment.Configuration;
 using Orchard.Logging;
 using StackExchange.Redis;
+using Orchard.UI.Notify;
+using Orchard.Localization;
 
 namespace Orchard.Redis.Configuration {
 
     public class RedisConnectionProvider : IRedisConnectionProvider {
-        private static ConcurrentDictionary<string, ConnectionMultiplexer> _connectionMultiplexers = new ConcurrentDictionary<string, ConnectionMultiplexer>();
+        private static ConcurrentDictionary<string, Lazy<ConnectionMultiplexer>> _connectionMultiplexers = new ConcurrentDictionary<string, Lazy<ConnectionMultiplexer>>();
         private readonly ShellSettings _shellSettings;
 
         public RedisConnectionProvider(ShellSettings shellSettings) {
             _shellSettings = shellSettings;
             Logger = NullLogger.Instance;
         }
+
+        public Localizer T { get; set; }
 
         public ILogger Logger { get; set; }
 
@@ -25,7 +29,7 @@ namespace Orchard.Redis.Configuration {
             var connectionStringSettings = ConfigurationManager.ConnectionStrings[_tenantSettingsKey] ?? ConfigurationManager.ConnectionStrings[_defaultSettingsKey];
 
             if (connectionStringSettings == null) {
-                throw new ConfigurationErrorsException("A connection string is expected for " + service);
+                return null;
             }
 
             return connectionStringSettings.ConnectionString;
@@ -34,15 +38,19 @@ namespace Orchard.Redis.Configuration {
         public ConnectionMultiplexer GetConnection(string connectionString) {
 
             if (String.IsNullOrWhiteSpace(connectionString)) {
-                throw new ArgumentNullException("connectionString");
+                return null;
             }
 
-            var connectionMultiplexer = _connectionMultiplexers.GetOrAdd(connectionString, cfg => {
-                Logger.Debug("Creating a new cache client for: {0}", connectionString);
-                return ConnectionMultiplexer.Connect(connectionString);
-            });
+            // when using ConcurrentDictionary, multiple threads can create the value
+            // at the same time, so we need to pass a Lazy so that it's only 
+            // the object which is added that will create a ConnectionMultiplexer,
+            // even when a delegate is passed
 
-            return connectionMultiplexer;
+            return _connectionMultiplexers.GetOrAdd(connectionString,
+                new Lazy<ConnectionMultiplexer>(() => {
+                    Logger.Debug("Creating a new cache client for: {0}", connectionString);
+                    return ConnectionMultiplexer.Connect(connectionString);
+                })).Value;
         }
     }
 }

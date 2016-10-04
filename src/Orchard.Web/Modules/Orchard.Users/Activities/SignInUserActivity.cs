@@ -5,6 +5,7 @@ using Orchard.ContentManagement;
 using Orchard.Environment.Extensions;
 using Orchard.Localization;
 using Orchard.Security;
+using Orchard.Users.Events;
 using Orchard.Users.Models;
 using Orchard.Workflows.Models;
 using Orchard.Workflows.Services;
@@ -14,10 +15,12 @@ namespace Orchard.Users.Activities {
     public class SignInUserActivity : Task {
         private readonly IMembershipService _membershipService;
         private readonly IAuthenticationService _authenticationService;
+        private readonly IUserEventHandler _userEventHandler;
 
-        public SignInUserActivity(IMembershipService membershipService, IAuthenticationService authenticationService) {
+        public SignInUserActivity(IMembershipService membershipService, IAuthenticationService authenticationService, IUserEventHandler userEventHandler) {
             _membershipService = membershipService;
             _authenticationService = authenticationService;
+            _userEventHandler = userEventHandler;
             T = NullLocalizer.Instance;
         }
 
@@ -32,7 +35,7 @@ namespace Orchard.Users.Activities {
         }
 
         public override LocalizedString Description {
-            get { return T("Signs in a user based on the specified credentials, or if the current content item us a user, that user is signed in."); }
+            get { return T("Signs in a user based on the specified credentials, or if the current content item is a user, that user is signed in."); }
         }
 
         public override string Form {
@@ -66,7 +69,9 @@ namespace Orchard.Users.Activities {
                 yield break;
             }
 
+            _userEventHandler.LoggingIn(userNameOrEmail, password);
             _authenticationService.SignIn(user, createPersistentCookie);
+            _userEventHandler.LoggedIn(user);            
 
             yield return T("Done");
         }

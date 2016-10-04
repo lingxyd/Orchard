@@ -11,11 +11,11 @@ using Orchard.Environment.Extensions;
 namespace Orchard.AuditTrail.Services {
     [OrchardFeature("Orchard.AuditTrail.RecycleBin")]
     public class RecycleBin : IRecycleBin {
-        private readonly ISessionLocator _sessionLocator;
+        private readonly ITransactionManager _transactionManager;
         private readonly IContentManager _contentManager;
 
-        public RecycleBin(ISessionLocator sessionLocator, IContentManager contentManager) {
-            _sessionLocator = sessionLocator;
+        public RecycleBin(ITransactionManager transactionManager, IContentManager contentManager) {
+            _transactionManager = transactionManager;
             _contentManager = contentManager;
         }
 
@@ -28,7 +28,7 @@ namespace Orchard.AuditTrail.Services {
             var totalCount = query.List().Count;
             
             query.SetFirstResult((page - 1) * pageSize);
-            query.SetFetchSize(pageSize);
+            query.SetMaxResults(pageSize);
 
             var contentItems = LoadContentItems<T>(query);
             
@@ -65,7 +65,7 @@ namespace Orchard.AuditTrail.Services {
         }
 
         private IQuery GetDeletedVersionsQuery(IEnumerable<int> contentItemIds = null) {
-            var session = _sessionLocator.For(typeof(ContentItemVersionRecord));
+            var session = _transactionManager.GetSession();
 
             // Select only the highest versions where both Published and Latest are false.
             var select =

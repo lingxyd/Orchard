@@ -19,6 +19,7 @@ using Orchard.Projections.ViewModels;
 using Orchard.Tokens;
 using Orchard.UI.Navigation;
 using Orchard.Layouts.Helpers;
+using Orchard.Layouts.Services;
 using DescribeContext = Orchard.Forms.Services.DescribeContext;
 
 namespace Orchard.Layouts.Drivers {
@@ -32,13 +33,13 @@ namespace Orchard.Layouts.Drivers {
         private readonly IDisplayHelperFactory _displayHelperFactory;
 
         public ProjectionElementDriver(
-            IFormManager formManager,
+            IFormsBasedElementServices formsServices,
             IProjectionManager projectionManager,
             IOrchardServices services,
             IRepository<LayoutRecord> layoutRepository,
             ITokenizer tokenizer,
             IDisplayHelperFactory displayHelperFactory)
-            : base(formManager) {
+            : base(formsServices) {
 
             _projectionManager = projectionManager;
             _contentManager = services.ContentManager;
@@ -233,27 +234,27 @@ namespace Orchard.Layouts.Drivers {
                         Title: T("Items to display"),
                         Value: "0",
                         Description: T("The number of items to display. Enter 0 for no limit. When using pagination, this is the number of items per page."),
-                        Classes: new[] { "text", "medium", "tokenized" }),
+                        Classes: new[] { "text", "medium" }),
                     _Skip: shape.Textbox(
                         Id: "Skip",
                         Name: "Skip",
                         Title: T("Offset"),
                         Value: "0",
                         Description: T("The number of items to skip (e.g., if 2 is entered, the first 2 items won't be diplayed)."),
-                        Classes: new[] { "text", "medium", "tokenized" }),
+                        Classes: new[] { "text", "medium" }),
                     _MaxItems: shape.Textbox(
                         Id: "MaxItems",
                         Name: "MaxItems",
                         Title: T("MaxItems items"),
                         Value: "20",
                         Description: T("Maximum number of items which can be queried at once. Use 0 for unlimited. This is only used as a failsafe when the number of items comes from a user-provided source such as the query string."),
-                        Classes: new[] { "text", "medium", "tokenized" }),
+                        Classes: new[] { "text", "medium" }),
                     _PagerSuffix: shape.Textbox(
                         Id: "PagerSuffix",
                         Name: "PagerSuffix",
                         Title: T("Suffix"),
                         Description: T("Optional. Provide a suffix to use when multiple pagers are displayed on the same page, e.g., when using multiple Projection Widgets, or to define alternates."),
-                        Classes: new[] { "text", "medium", "tokenized" }),
+                        Classes: new[] { "text", "medium" }),
                     _DisplayPager: shape.Checkbox(
                         Id: "DisplayPager",
                         Name: "DisplayPager",
@@ -288,17 +289,17 @@ namespace Orchard.Layouts.Drivers {
 
         protected override void OnExporting(Projection element, ExportElementContext context) {
             var query = element.QueryId != null ? _contentManager.Get<QueryPart>(element.QueryId.Value) : default(QueryPart);
-            var layout = element.LayoutId != null ? _layoutRepository.Get(element.LayoutId.Value) : default(LayoutRecord);
+            var layout = query != null && element.LayoutId != null ? _layoutRepository.Get(element.LayoutId.Value) : default(LayoutRecord);
             var queryIdentity = query != null ? _contentManager.GetItemMetadata(query).Identity.ToString() : default(string);
-            var layoutIndex = layout != null ? query.Layouts.IndexOf(layout) : default(int?);
+            var layoutIndex = layout != null ? query.Layouts.IndexOf(layout) : -1; // -1 is the Default Layout.
 
-            if (queryIdentity != null && layoutIndex != null) {
+            if (queryIdentity != null) {
                 context.ExportableData["QueryId"] = queryIdentity;
-                context.ExportableData["LayoutIndex"] = layoutIndex.Value.ToString();
+                context.ExportableData["LayoutIndex"] = layoutIndex.ToString();
             }
         }
 
-        protected override void OnImporting(Projection element, ImportElementContext context) {
+        protected override void OnImportCompleted(Projection element, ImportElementContext context) {
             var queryIdentity = context.ExportableData.Get("QueryId");
             var query = queryIdentity != null ? context.Session.GetItemFromSession(queryIdentity) : default(ContentManagement.ContentItem);
 
@@ -307,10 +308,9 @@ namespace Orchard.Layouts.Drivers {
 
             var queryPart = query.As<QueryPart>();
             var layoutIndex = XmlHelper.Parse<int>(context.ExportableData.Get("LayoutIndex"));
-            var layout = queryPart.Layouts[layoutIndex];
 
             element.QueryId = queryPart.Id;
-            element.LayoutId = layout.Id;
+            element.LayoutId = layoutIndex != -1 ? queryPart.Layouts[layoutIndex].Id : -1;
         }
 
         private static string GetLayoutDescription(IEnumerable<LayoutDescriptor> layouts, LayoutRecord l) {
